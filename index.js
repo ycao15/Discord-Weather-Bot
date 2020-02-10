@@ -1,29 +1,89 @@
 "use strict";
 
+// IMPORTS
+require("dotenv").config();
 const Discord = require("discord.js");
 const discord_client = new Discord.Client();
-require("dotenv").config();
+// https://developers.google.com/maps/documentation/geocoding/start?hl=en_US
+const googleMapsClient = require("@google/maps").createClient({
+  key: process.env.GOOGLE_PLACES_GEOCODER_KEY,
+  Promise: Promise
+});
+const fetch = require("node-fetch");
 
+// CONSTANTS
+const darksky_endpoint = "https://api.darksky.net/forecast/";
 const prefix = "!";
 
-/*
-discord_client.once("ready", () => {
-  // console.log("Ready!");
-});
-*/
+// Message Handler
+discord_client.on("message", async message => {
+  // Return immediately if the message is from a bot
+  if (message.author.bot) return;
+  let message_content_split_array = message.content.split(/ +/);
 
-discord_client.on("message", message => {
-  // Immediately return if the messager is a bot OR the weather bot is not @mentioned
-  if (message.author.bot || !message.isMemberMentioned(discord_client.user))
-    return;
+  if (message.channel.type != "dm") {
+    // Return immediately if the bot is not mentioned when it is messaged in a public chat
+    if (!message.isMemberMentioned(discord_client.user)) {
+      return;
+    }
+    // Remove mentions from the args list to make query parsing easier
+    else {
+      message_content_split_array = message_content_split_array.filter(
+        // The Discord.MessageMentions method doesn't seem to work when the args list length is > 1
+        // arg => !Discord.MessageMentions.USERS_PATTERN.test(arg)
+        arg => !arg.startsWith("<@!")
+      );
+    }
+  }
 
+  // TODO: Send an error message or a usage guide
+  if (message_content_split_array.length == 0) return;
+
+  // Process Commands
   if (message.content.startsWith(prefix)) {
-    const args = message.content.slice(prefix.length).split(" ");
+    const args = message.content.slice(prefix.length).split(/ +/);
     const command = args.shift().toLowerCase();
     console.log(command, args);
   }
+  // Process Queries
+  else {
+    try {
+      const geocoder_response = await googleMapsClient
+        .geocode({
+          address: message_content_split_array.join(" "),
+          region: "US"
+        })
+        .asPromise();
+      const geocoder_json = geocoder_response.json; // Has 2 keys: 'results', 'status'
 
-  console.log(message.content);
+      if (geocoder_response.status !== 200) {
+        // TODO: Depending on the status, send a message to the user about the error
+        console.log(
+          "Google Geocoder API returned status: ",
+          geocoder_json.status
+        );
+        return;
+      }
+
+      const geocoder_first_result = geocoder_json.results[0];
+      console.log(
+        "Fetching weather for ",
+        geocoder_first_result.formatted_address
+      );
+
+      const coordinates = geocoder_first_result.geometry.location;
+      const coordinate_string = `/${coordinates.lat},${coordinates.lng}`;
+      const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
+
+      const weather_response = await fetch(weather_url);
+      const weather_json = await weather_response.json();
+      console.log(weather_json);
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  console.log(message_content_split_array);
   // console.log(message.mentions);
   // console.log("message author: ", message.author);
 
