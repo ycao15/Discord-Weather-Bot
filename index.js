@@ -11,6 +11,8 @@ const googleMapsClient = require("@google/maps").createClient({
 });
 const fetch = require("node-fetch");
 
+const geocode = require("./geocoder.js");
+
 // CONSTANTS
 const darksky_endpoint = "https://api.darksky.net/forecast/";
 const prefix = "!";
@@ -47,40 +49,24 @@ discord_client.on("message", async message => {
   }
   // Process Queries
   else {
-    try {
-      const geocoder_response = await googleMapsClient
-        .geocode({
-          address: message_content_split_array.join(" "),
-          region: "US"
-        })
-        .asPromise();
-      const geocoder_json = geocoder_response.json; // Has 2 keys: 'results', 'status'
+    const geocoder_result = await geocode(
+      message_content_split_array.join(" ")
+    );
 
-      if (geocoder_response.status !== 200) {
-        // TODO: Depending on the status, send a message to the user about the error
-        console.log(
-          "Google Geocoder API returned status: ",
-          geocoder_json.status
-        );
-        return;
-      }
-
-      const geocoder_first_result = geocoder_json.results[0];
-      console.log(
-        "Fetching weather for ",
-        geocoder_first_result.formatted_address
-      );
-
-      const coordinates = geocoder_first_result.geometry.location;
-      const coordinate_string = `/${coordinates.lat},${coordinates.lng}`;
-      const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
-
-      const weather_response = await fetch(weather_url);
-      const weather_json = await weather_response.json();
-      console.log(weather_json);
-    } catch (err) {
-      console.log(err);
+    if (geocoder_result === undefined) {
+      return;
     }
+
+    message.channel.send(
+      `Fetching weather for ${geocoder_result.formatted_address}`
+    );
+
+    const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
+    const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
+
+    const weather_response = await fetch(weather_url);
+    const weather_json = await weather_response.json();
+    console.log(weather_json);
   }
 
   console.log(message_content_split_array);
