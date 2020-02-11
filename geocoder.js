@@ -6,6 +6,7 @@ const googleMapsClient = require("@google/maps").createClient({
   key: process.env.GOOGLE_PLACES_GEOCODER_KEY,
   Promise: Promise
 });
+// https://developers.google.com/maps/documentation/geocoding/start?hl=en_US
 
 async function geocode(query_string) {
   try {
@@ -28,7 +29,7 @@ async function geocode(query_string) {
 
     const geocoder_first_result = geocoder_json.results[0];
     console.log(
-      "Fetching weather for ",
+      "Fetching weather for",
       geocoder_first_result.formatted_address
     );
 

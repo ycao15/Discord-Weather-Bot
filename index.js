@@ -4,11 +4,6 @@
 require("dotenv").config();
 const Discord = require("discord.js");
 const discord_client = new Discord.Client();
-// https://developers.google.com/maps/documentation/geocoding/start?hl=en_US
-const googleMapsClient = require("@google/maps").createClient({
-  key: process.env.GOOGLE_PLACES_GEOCODER_KEY,
-  Promise: Promise
-});
 const fetch = require("node-fetch");
 
 const geocode = require("./geocoder.js");
@@ -16,6 +11,62 @@ const geocode = require("./geocoder.js");
 // CONSTANTS
 const darksky_endpoint = "https://api.darksky.net/forecast/";
 const prefix = "!";
+
+async function process_weather(geocoder_result) {
+  // Format an API request URL
+  const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
+  const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
+
+  // Send the request and convert it to JSON
+  const weather_response = await fetch(weather_url);
+  const weather_json = await weather_response.json();
+
+  // Get the local time
+  let date = new Date(weather_json.currently.time);
+  const time_format_options = {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: weather_json.timezone,
+    hour12: false
+  };
+  const local_time = date.toLocaleString("en-US", time_format_options);
+
+  // console.log(weather_json);
+  const weather_report = {
+    title: "Weather for " + geocoder_result.formatted_address,
+    summary: weather_json.currently.summary,
+    local_time: local_time,
+    temperature: Math.round(weather_json.currently.temperature),
+    feels_like: Math.round(weather_json.currently.apparentTemperature),
+    icon: weather_json.currently.icon
+  };
+
+  return weather_report;
+}
+
+function construct_Discord_embed(weather_report) {
+  const embed = {
+    color: 0x0099ff,
+    title: weather_report.title,
+    description: weather_report.summary,
+    fields: [
+      {
+        name: "Local Time",
+        value: weather_report.local_time
+      },
+      {
+        name: "Temperature",
+        value: String(weather_report.temperature) + "°F"
+      },
+      {
+        name: "Feels Like",
+        value: String(weather_report.feels_like) + "°F"
+      }
+    ]
+  };
+
+  return embed;
+}
 
 // Message Handler
 discord_client.on("message", async message => {
@@ -53,20 +104,24 @@ discord_client.on("message", async message => {
       message_content_split_array.join(" ")
     );
 
+    /*
+    const geocoder_result = {
+      formatted_address: "Los Angeles, CA, USA",
+      coordinates: {
+        lat: 34.0522342,
+        lon: -118.2436849
+      }
+    };
+    */
+
     if (geocoder_result === undefined) {
       return;
     }
 
-    message.channel.send(
-      `Fetching weather for ${geocoder_result.formatted_address}`
-    );
-
-    const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
-    const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
-
-    const weather_response = await fetch(weather_url);
-    const weather_json = await weather_response.json();
-    console.log(weather_json);
+    const weather_report = await process_weather(geocoder_result);
+    const embed = construct_Discord_embed(weather_report);
+    message.channel.send({ embed: embed });
+    console.log(weather_report);
   }
 
   console.log(message_content_split_array);
@@ -77,3 +132,13 @@ discord_client.on("message", async message => {
 });
 
 discord_client.login(process.env.DISCORD_TOKEN);
+
+/*
+// Converts given unix timestamp to local time
+// timeZone parameter should be the one given by DarkSky
+let date = new Date(timestamp);
+
+let local_date_time = date.toLocaleString("en-US", {timeZone: "America/Los_Angeles"});
+let local_time = local_date_time.split(", ")[1];
+
+*/
