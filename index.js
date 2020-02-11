@@ -11,8 +11,25 @@ const geocode = require("./geocoder.js");
 // CONSTANTS
 const darksky_endpoint = "https://api.darksky.net/forecast/";
 const prefix = "!";
+const cardinal_dir_map = {
+  0: "N",
+  45: "NE",
+  90: "E",
+  135: "SE",
+  180: "S",
+  225: "SW",
+  270: "W",
+  315: "NW",
+  360: "N"
+};
 
-async function process_weather(geocoder_result) {
+// Return one of the following: N, NE, E, SE, S, SW, W, NW
+function get_wind_direction(windBearing) {
+  const cardinal_rounded_bearing = Math.round(windBearing / 45) * 45;
+  return cardinal_dir_map[cardinal_rounded_bearing];
+}
+
+async function get_weather_report(geocoder_result) {
   // Format an API request URL
   const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
   const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
@@ -22,6 +39,7 @@ async function process_weather(geocoder_result) {
   const weather_json = await weather_response.json();
 
   // Get the local time
+  // TODO: Fix => This is the last recoding from DarkSky, not the actual current local time
   let date = new Date(weather_json.currently.time);
   const time_format_options = {
     hour: "2-digit",
@@ -33,11 +51,21 @@ async function process_weather(geocoder_result) {
 
   // console.log(weather_json);
   const weather_report = {
-    title: "Weather for " + geocoder_result.formatted_address,
+    title: geocoder_result.formatted_address,
     summary: weather_json.currently.summary,
     local_time: local_time,
-    temperature: Math.round(weather_json.currently.temperature),
-    feels_like: Math.round(weather_json.currently.apparentTemperature),
+    temperatures: {
+      current: Math.round(weather_json.currently.temperature),
+      feels_like: Math.round(weather_json.currently.apparentTemperature),
+      high: weather_json.daily.data[0].temperatureHigh,
+      low: weather_json.daily.data[0].temperatureLow
+    },
+    chance_of_rain: Math.round(100 * weather_json.currently.precipProbability),
+    wind: {
+      speed: weather_json.currently.windSpeed,
+      gust: weather_json.currently.windGust,
+      direction: get_wind_direction(weather_json.currently.windBearing)
+    },
     icon: weather_json.currently.icon
   };
 
@@ -52,15 +80,33 @@ function construct_Discord_embed(weather_report) {
     fields: [
       {
         name: "Local Time",
-        value: weather_report.local_time
+        value: weather_report.local_time,
+        inline: true
+      },
+      {
+        name: "Chance of Rain",
+        value: String(weather_report.chance_of_rain) + "%",
+        inline: true
       },
       {
         name: "Temperature",
-        value: String(weather_report.temperature) + "°F"
+        value: String(weather_report.temperatures.current) + "°",
+        inline: true
       },
       {
         name: "Feels Like",
-        value: String(weather_report.feels_like) + "°F"
+        value: String(weather_report.temperatures.feels_like) + "°",
+        inline: true
+      },
+      {
+        name: "High",
+        value: String(Math.round(weather_report.temperatures.high)) + "°",
+        inline: true
+      },
+      {
+        name: "Low",
+        value: String(Math.round(weather_report.temperatures.low)) + "°",
+        inline: true
       }
     ]
   };
@@ -104,41 +150,15 @@ discord_client.on("message", async message => {
       message_content_split_array.join(" ")
     );
 
-    /*
-    const geocoder_result = {
-      formatted_address: "Los Angeles, CA, USA",
-      coordinates: {
-        lat: 34.0522342,
-        lon: -118.2436849
-      }
-    };
-    */
-
     if (geocoder_result === undefined) {
       return;
     }
 
-    const weather_report = await process_weather(geocoder_result);
+    const weather_report = await get_weather_report(geocoder_result);
     const embed = construct_Discord_embed(weather_report);
     message.channel.send({ embed: embed });
     console.log(weather_report);
   }
-
-  console.log(message_content_split_array);
-  // console.log(message.mentions);
-  // console.log("message author: ", message.author);
-
-  console.log();
 });
 
 discord_client.login(process.env.DISCORD_TOKEN);
-
-/*
-// Converts given unix timestamp to local time
-// timeZone parameter should be the one given by DarkSky
-let date = new Date(timestamp);
-
-let local_date_time = date.toLocaleString("en-US", {timeZone: "America/Los_Angeles"});
-let local_time = local_date_time.split(", ")[1];
-
-*/
