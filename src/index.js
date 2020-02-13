@@ -23,6 +23,21 @@ const cardinal_dir_map = {
   360: "N"
 };
 
+// https://github.com/manifestinteractive/weather-underground-icons
+const img_dir = "./img/";
+const icon_name_to_filename_map = {
+  "clear-day": "clear.png",
+  "clear-night": "nt_clear.png",
+  rain: "rain.png",
+  snow: "snow.png",
+  sleet: "sleet.png",
+  wind: "wind.png",
+  fog: "../img/fog.png",
+  cloudy: "../img/cloudy.png",
+  "partly-cloudy-day": "../img/partlycloudy.png",
+  "partly-cloudy-night": "../img/nt_partlycloudy.png"
+};
+
 // Return one of the following: N, NE, E, SE, S, SW, W, NW
 function get_wind_direction(windBearing) {
   const cardinal_rounded_bearing = Math.round(windBearing / 45) * 45;
@@ -40,7 +55,7 @@ async function get_weather_report(geocoder_result) {
 
   // Get the local time
   // TODO: Fix => This is the last recoding from DarkSky, not the actual current local time
-  let date = new Date(weather_json.currently.time);
+  let date = new Date();
   const time_format_options = {
     hour: "2-digit",
     minute: "2-digit",
@@ -72,15 +87,22 @@ async function get_weather_report(geocoder_result) {
   return weather_report;
 }
 
+function get_weather_icon(darksky_icon_name) {
+  return 0;
+}
+
 function construct_Discord_embed(weather_report) {
   const embed = {
     color: 0x0099ff,
     title: weather_report.title,
     description: weather_report.summary,
+    thumbnail: {
+      url: "attachment://" + icon_name_to_filename_map[weather_report.icon]
+    },
     fields: [
       {
-        name: "Local Time",
-        value: weather_report.local_time,
+        name: "Temperature",
+        value: String(weather_report.temperatures.current) + "°",
         inline: true
       },
       {
@@ -89,8 +111,8 @@ function construct_Discord_embed(weather_report) {
         inline: true
       },
       {
-        name: "Temperature",
-        value: String(weather_report.temperatures.current) + "°",
+        name: "Local Time",
+        value: weather_report.local_time,
         inline: true
       },
       {
@@ -156,7 +178,15 @@ discord_client.on("message", async message => {
 
     const weather_report = await get_weather_report(geocoder_result);
     const embed = construct_Discord_embed(weather_report);
-    message.channel.send({ embed: embed });
+    message.channel.send({
+      embed: embed,
+      files: [
+        {
+          attachment: img_dir + icon_name_to_filename_map[weather_report.icon],
+          name: icon_name_to_filename_map[weather_report.icon]
+        }
+      ]
+    });
     console.log(weather_report);
   }
 });
