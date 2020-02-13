@@ -1,7 +1,8 @@
 "use strict";
 
+// IMPORTS
 require("dotenv").config();
-
+const logger = require("./logger.js");
 const googleMapsClient = require("@google/maps").createClient({
   key: process.env.GOOGLE_PLACES_GEOCODER_KEY,
   Promise: Promise
@@ -20,18 +21,13 @@ async function geocode(query_string) {
 
     if (geocoder_response.status !== 200) {
       // TODO: Depending on the status, send a message to the user about the error
-      console.log(
-        "Google Geocoder API returned status: ",
-        geocoder_json.status
+      logger.error(
+        `Error: Google Geocoder API returned status: ${geocoder_json.status}`
       );
       return;
     }
 
     const geocoder_first_result = geocoder_json.results[0];
-    console.log(
-      "Fetching weather for",
-      geocoder_first_result.formatted_address
-    );
 
     const google_coordinates = geocoder_first_result.geometry.location;
     return {

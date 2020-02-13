@@ -2,11 +2,12 @@
 
 // IMPORTS
 require("dotenv").config();
+const logger = require("./logger.js");
 const fetch = require("node-fetch");
 
 // CONSTANTS
 const darksky_endpoint = "https://api.darksky.net/forecast/";
-const img_dir = "./img/";
+const img_dir = "../img/";
 const cardinal_dir_map = {
   0: "N",
   45: "NE",
@@ -41,6 +42,8 @@ function get_wind_direction(windBearing) {
 }
 
 async function get_weather_report(geocoder_result) {
+  logger.info(`Fetching weather for ${geocoder_result.formatted_address}`);
+
   // Format an API request URL
   const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
   const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;

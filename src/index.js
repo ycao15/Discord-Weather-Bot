@@ -2,6 +2,7 @@
 
 // IMPORTS
 require("dotenv").config();
+const logger = require("./logger.js");
 const Discord = require("discord.js");
 const discord_client = new Discord.Client();
 const geocode = require("./geocoder.js");
@@ -73,8 +74,18 @@ function send_weather_to_user(channel, weather_report) {
       }
     ]
   });
-  console.log(weather_report);
 }
+
+////////////////////
+// EVENT HANDLERS //
+////////////////////
+
+discord_client.on("ready", () => logger.info("Starting Weather Bot"));
+discord_client.on("debug", m => logger.debug(m));
+discord_client.on("warn", m => logger.warn(m));
+discord_client.on("error", m => logger.error(m));
+
+process.on("uncaughtException", error => logger.error(error));
 
 // Message Handler
 discord_client.on("message", async message => {
