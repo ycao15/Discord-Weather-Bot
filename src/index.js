@@ -4,106 +4,25 @@
 require("dotenv").config();
 const Discord = require("discord.js");
 const discord_client = new Discord.Client();
-const fetch = require("node-fetch");
-
 const geocode = require("./geocoder.js");
+const get_weather_report = require("./weather.js");
 
 // CONSTANTS
-const darksky_endpoint = "https://api.darksky.net/forecast/";
 const prefix = "!";
-const cardinal_dir_map = {
-  0: "N",
-  45: "NE",
-  90: "E",
-  135: "SE",
-  180: "S",
-  225: "SW",
-  270: "W",
-  315: "NW",
-  360: "N"
-};
-
-// https://github.com/manifestinteractive/weather-underground-icons
-const img_dir = "./img/";
-const icon_name_to_filename_map = {
-  "clear-day": "clear.png",
-  "clear-night": "nt_clear.png",
-  rain: "rain.png",
-  snow: "snow.png",
-  sleet: "sleet.png",
-  wind: "wind.png",
-  fog: "../img/fog.png",
-  cloudy: "../img/cloudy.png",
-  "partly-cloudy-day": "../img/partlycloudy.png",
-  "partly-cloudy-night": "../img/nt_partlycloudy.png"
-};
-
-// Return one of the following: N, NE, E, SE, S, SW, W, NW
-function get_wind_direction(windBearing) {
-  const cardinal_rounded_bearing = Math.round(windBearing / 45) * 45;
-  return cardinal_dir_map[cardinal_rounded_bearing];
-}
-
-async function get_weather_report(geocoder_result) {
-  // Format an API request URL
-  const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
-  const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
-
-  // Send the request and convert it to JSON
-  const weather_response = await fetch(weather_url);
-  const weather_json = await weather_response.json();
-
-  // Get the local time
-  // TODO: Fix => This is the last recoding from DarkSky, not the actual current local time
-  let date = new Date();
-  const time_format_options = {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: weather_json.timezone,
-    hour12: false
-  };
-  const local_time = date.toLocaleString("en-US", time_format_options);
-
-  // console.log(weather_json);
-  const weather_report = {
-    title: geocoder_result.formatted_address,
-    summary: weather_json.currently.summary,
-    local_time: local_time,
-    temperatures: {
-      current: Math.round(weather_json.currently.temperature),
-      feels_like: Math.round(weather_json.currently.apparentTemperature),
-      high: weather_json.daily.data[0].temperatureHigh,
-      low: weather_json.daily.data[0].temperatureLow
-    },
-    chance_of_rain: Math.round(100 * weather_json.currently.precipProbability),
-    wind: {
-      speed: weather_json.currently.windSpeed,
-      gust: weather_json.currently.windGust,
-      direction: get_wind_direction(weather_json.currently.windBearing)
-    },
-    icon: weather_json.currently.icon
-  };
-
-  return weather_report;
-}
-
-function get_weather_icon(darksky_icon_name) {
-  return 0;
-}
 
 function construct_Discord_embed(weather_report) {
-  const embed = {
+  const discord_rich_embed = {
     color: 0x0099ff,
     title: weather_report.title,
     description: weather_report.summary,
     thumbnail: {
-      url: "attachment://" + icon_name_to_filename_map[weather_report.icon]
+      url: "attachment://" + weather_report.icon
     },
     fields: [
       {
         name: "Temperature",
         value: String(weather_report.temperatures.current) + "°",
-        inline: true
+        inline: false
       },
       {
         name: "Chance of Rain",
@@ -122,18 +41,39 @@ function construct_Discord_embed(weather_report) {
       },
       {
         name: "High",
-        value: String(Math.round(weather_report.temperatures.high)) + "°",
+        value: String(weather_report.temperatures.high) + "°",
         inline: true
       },
       {
         name: "Low",
-        value: String(Math.round(weather_report.temperatures.low)) + "°",
+        value: String(weather_report.temperatures.low) + "°",
+        inline: true
+      },
+      {
+        name: "Wind",
+        value:
+          String(weather_report.wind.speed) +
+          "mph " +
+          weather_report.wind.direction_cardinal,
         inline: true
       }
     ]
   };
 
-  return embed;
+  return discord_rich_embed;
+}
+
+function send_weather_to_user(channel, weather_report) {
+  channel.send({
+    embed: construct_Discord_embed(weather_report),
+    files: [
+      {
+        attachment: weather_report.icon_url,
+        name: weather_report.icon
+      }
+    ]
+  });
+  console.log(weather_report);
 }
 
 // Message Handler
@@ -150,8 +90,6 @@ discord_client.on("message", async message => {
     // Remove mentions from the args list to make query parsing easier
     else {
       message_content_split_array = message_content_split_array.filter(
-        // The Discord.MessageMentions method doesn't seem to work when the args list length is > 1
-        // arg => !Discord.MessageMentions.USERS_PATTERN.test(arg)
         arg => !arg.startsWith("<@!")
       );
     }
@@ -166,28 +104,18 @@ discord_client.on("message", async message => {
     const command = args.shift().toLowerCase();
     console.log(command, args);
   }
+
   // Process Queries
   else {
-    const geocoder_result = await geocode(
-      message_content_split_array.join(" ")
-    );
+    const query_string = message_content_split_array.join(" ");
+    const geocoder_result = await geocode(query_string);
 
     if (geocoder_result === undefined) {
       return;
     }
 
     const weather_report = await get_weather_report(geocoder_result);
-    const embed = construct_Discord_embed(weather_report);
-    message.channel.send({
-      embed: embed,
-      files: [
-        {
-          attachment: img_dir + icon_name_to_filename_map[weather_report.icon],
-          name: icon_name_to_filename_map[weather_report.icon]
-        }
-      ]
-    });
-    console.log(weather_report);
+    send_weather_to_user(message.channel, weather_report);
   }
 });
 
