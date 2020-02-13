@@ -6,9 +6,10 @@ const logger = require("./logger.js");
 const fetch = require("node-fetch");
 
 // CONSTANTS
-const darksky_endpoint = "https://api.darksky.net/forecast/";
+const darksky_endpoint = "https://api.darksky.net/forecast";
 const img_dir = "../img/";
 const cardinal_dir_map = {
+  // maps 45 degree bearings to a cardinal direction
   0: "N",
   45: "NE",
   90: "E",
@@ -41,32 +42,35 @@ function get_wind_direction(windBearing) {
   return cardinal_dir_map[cardinal_rounded_bearing];
 }
 
+function get_local_time(timezone) {
+  const time_format_options = {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timezone,
+    hour12: false
+  };
+
+  let date = new Date();
+  const local_time = date.toLocaleString("en-US", time_format_options);
+  return local_time;
+}
+
 async function get_weather_report(geocoder_result) {
   logger.info(`Fetching weather for ${geocoder_result.formatted_address}`);
 
   // Format an API request URL
-  const coordinate_string = `/${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
-  const weather_url = `${darksky_endpoint}${process.env.DARKSKY_KEY}${coordinate_string}`;
+  const coordinate_string = `${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;
+  const weather_url = `${darksky_endpoint}/${process.env.DARKSKY_KEY}/${coordinate_string}`;
 
   // Send the request and convert it to JSON
   const weather_response = await fetch(weather_url);
   const weather_json = await weather_response.json();
 
-  // Get the local time
-  let date = new Date();
-  const time_format_options = {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: weather_json.timezone,
-    hour12: false
-  };
-  const local_time = date.toLocaleString("en-US", time_format_options);
-
   const icon = icon_name_to_filename_map[weather_json.currently.icon];
   const weather_report = {
     title: geocoder_result.formatted_address,
     summary: weather_json.currently.summary,
-    local_time: local_time,
+    local_time: get_local_time(weather_json.timezone),
     temperatures: {
       current: Math.round(weather_json.currently.temperature),
       feels_like: Math.round(weather_json.currently.apparentTemperature),

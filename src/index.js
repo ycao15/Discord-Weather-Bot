@@ -121,7 +121,12 @@ discord_client.on("message", async message => {
     const query_string = message_content_split_array.join(" ");
     const geocoder_result = await geocode(query_string);
 
+    // Handle errors with geocoding
     if (geocoder_result === undefined) {
+      return;
+    }
+    if (geocoder_result.status === -1) {
+      message.channel.send(geocoder_result.error_msg);
       return;
     }
 
