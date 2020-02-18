@@ -55,8 +55,12 @@ function get_local_time(timezone) {
   return local_time;
 }
 
-async function get_weather_report(geocoder_result) {
+async function get_weather_report(geocoder_result, query_modifier) {
   logger.info(`Fetching weather for ${geocoder_result.formatted_address}`);
+  if (query_modifier !== '_') {
+    logger.info(`User query modifier: ${query_modifier}`);
+  }
+  // TODO: Handle query modifiers
 
   // Format an API request URL
   const coordinate_string = `${geocoder_result.coordinates.lat},${geocoder_result.coordinates.lon}`;

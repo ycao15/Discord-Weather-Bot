@@ -4,7 +4,7 @@
   "description": "Weather Bot for Discord",
   "main": "index.js",
   "scripts": {
-    "start": "node ./src",
+    "start": "cd src && node .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",

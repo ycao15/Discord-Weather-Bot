@@ -10,6 +10,30 @@ const get_weather_report = require("./weather.js");
 
 // CONSTANTS
 const prefix = "!";
+const query_modifiers = {
+  today: {
+    set: new Set(["td", "today"]),
+    modifier: "t0"
+  },
+  tomorrow: {
+    set: new Set(["tm", "tomorrow"]),
+    modifier: "t1"
+  }
+};
+
+function get_query_modifier(modifier) {
+  if (query_modifiers.today.set.has(modifier)) {
+    return query_modifiers.today.modifier;
+  }
+  else if (query_modifiers.tomorrow.set.has(modifier)) {
+    return query_modifiers.tomorrow.modifier;
+  }
+  else {
+    // TODO: Check if the potential modifier is a specific date
+  }
+
+  return "_";
+}
 
 function construct_Discord_embed(weather_report) {
   const discord_rich_embed = {
@@ -65,7 +89,7 @@ function construct_Discord_embed(weather_report) {
 }
 
 function send_weather_to_user(channel, weather_report) {
-  channel.send({
+  return channel.send({
     embed: construct_Discord_embed(weather_report),
     files: [
       {
@@ -74,6 +98,28 @@ function send_weather_to_user(channel, weather_report) {
       }
     ]
   });
+}
+
+async function process_query(query_string, query_modifier, discord_channel) {
+  const geocoder_result = await geocode(query_string);
+
+  // Handle errors with geocoding
+  if (geocoder_result === undefined) {
+    return;
+  }
+  if (geocoder_result.status === -1) {
+    discord_channel.send(geocoder_result.error_msg);
+    return;
+  }
+
+  try {
+    const weather_report = await get_weather_report(geocoder_result, query_modifier);
+    await send_weather_to_user(discord_channel, weather_report);
+  }
+  catch (error) {
+    logger.error(error);
+  }
+
 }
 
 ////////////////////
@@ -91,7 +137,7 @@ process.on("uncaughtException", error => logger.error(error));
 discord_client.on("message", async message => {
   // Return immediately if the message is from a bot
   if (message.author.bot) return;
-  let message_content_split_array = message.content.split(/ +/);
+  let message_content_array = message.content.split(/ +/);
 
   if (message.channel.type != "dm") {
     // Return immediately if the bot is not mentioned when it is messaged in a public chat
@@ -100,38 +146,28 @@ discord_client.on("message", async message => {
     }
     // Remove mentions from the args list to make query parsing easier
     else {
-      message_content_split_array = message_content_split_array.filter(
+      message_content_array = message_content_array.filter(
         arg => !arg.startsWith("<@!")
       );
     }
   }
 
   // TODO: Send an error message or a usage guide
-  if (message_content_split_array.length == 0) return;
+  if (message_content_array.length == 0) return;
 
   // Process Commands
   if (message.content.startsWith(prefix)) {
-    const args = message.content.slice(prefix.length).split(/ +/);
-    const command = args.shift().toLowerCase();
-    console.log(command, args);
+    const command = message_content_array[0].slice(prefix.length);
+    const args = message_content_array.slice(1);
   }
 
   // Process Queries
   else {
-    const query_string = message_content_split_array.join(" ");
-    const geocoder_result = await geocode(query_string);
+    let modifier = message_content_array[message_content_array.length - 1];
+    const query_modifier = get_query_modifier(modifier);
 
-    // Handle errors with geocoding
-    if (geocoder_result === undefined) {
-      return;
-    }
-    if (geocoder_result.status === -1) {
-      message.channel.send(geocoder_result.error_msg);
-      return;
-    }
-
-    const weather_report = await get_weather_report(geocoder_result);
-    send_weather_to_user(message.channel, weather_report);
+    const query_string = message_content_array.join(" ");
+    process_query(query_string, query_modifier, message.channel);
   }
 });
 
